@@ -17,9 +17,21 @@ def get_book_details_from_response(response):
     ]
     image = urllib.parse.urljoin(
         BASE_URL, soup.select_one(".bookimage img")["src"])
-    comments = [element.find(
-        "span", class_="black").text for element in soup.find_all("div", class_="texts")]
-    return title, author, image, comments
+    comments = [
+        element.find("span", class_="black").text
+        for element in soup.find_all("div", class_="texts")
+    ]
+    genres = [
+        element.text
+        for element in soup.find("span", class_="d_book").find_all("a")
+    ]
+    return {
+        "title": title,
+        "author": author,
+        "image": image,
+        "comments": comments,
+        "genres": genres
+    }
 
 
 def get_url_for_scraping(id):
@@ -92,9 +104,9 @@ def main():
     # images_directory_abs_path = os.path.join(os.getcwd(), images_directory)
     # pathlib.Path(images_directory_abs_path).mkdir(parents=True, exist_ok=True)
 
-    start_id = 5
+    start_id = 1
 
-    for increment in range(1):
+    for increment in range(10):
         current_id = start_id + increment
 
         url = get_url_for_scraping(current_id)
@@ -104,15 +116,15 @@ def main():
             check_for_redirect(response)
         except requests.HTTPError:
             continue
-        book_title, book_author, book_image, comments = get_book_details_from_response(
+        book_details = get_book_details_from_response(
             response
         )
-        download_image(book_image, images_directory)
+        download_image(book_details["image"], images_directory)
 
         try:
             downloaded = download_txt(
                 url=get_url_for_download_txt(current_id),
-                filename=f"{current_id}. {book_title}.txt",
+                filename=f"{current_id}. {book_details['title']}.txt",
                 folder=books_directory,
             )
         except requests.HTTPError:
