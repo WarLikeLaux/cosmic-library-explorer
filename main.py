@@ -1,3 +1,4 @@
+import argparse
 import os
 import pathlib
 import urllib
@@ -99,16 +100,26 @@ def main():
     books_directory = os.getenv("BOOKS_DIRECTORY", "books")
     images_directory = os.getenv("IMAGES_DIRECTORY", "images")
 
-    # books_directory_abs_path = os.path.join(os.getcwd(), books_directory)
-    # pathlib.Path(books_directory_abs_path).mkdir(parents=True, exist_ok=True)
-    # images_directory_abs_path = os.path.join(os.getcwd(), images_directory)
-    # pathlib.Path(images_directory_abs_path).mkdir(parents=True, exist_ok=True)
-
-    start_id = 1
-
-    for increment in range(10):
-        current_id = start_id + increment
-
+    parser = argparse.ArgumentParser(
+        description="Script for downloading books from tululu.org."
+    )
+    parser.add_argument(
+        "start_id",
+        nargs="?",
+        default=1,
+        type=int,
+        help="ID of first book to download, default is 1."
+    )
+    parser.add_argument(
+        "end_id",
+        nargs="?",
+        default=10,
+        type=int,
+        help="ID of last book to download, default is 10."
+    )
+    args = parser.parse_args()
+    start_id, end_id = args.start_id, args.end_id
+    for current_id in range(start_id, end_id + 1):
         url = get_url_for_scraping(current_id)
         response = requests.get(url)
         response.raise_for_status()
@@ -130,7 +141,17 @@ def main():
         except requests.HTTPError:
             continue
 
-        print(downloaded)
+        title = book_details["title"]
+        author = book_details["author"]
+        genres = book_details["genres"]
+        print(
+            f"Название: {title}",
+            f"Автор: {author}",
+            f"Жанры: {', '.join(genre.lower() for genre in genres)}",
+            f"Файл: '{downloaded}'",
+            sep="\n",
+            end="\n\n",
+        )
 
 
 if __name__ == "__main__":
