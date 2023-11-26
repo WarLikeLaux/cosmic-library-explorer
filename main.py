@@ -10,8 +10,8 @@ from pathvalidate import sanitize_filename
 BASE_URL = "https://tululu.org"
 
 
-def get_book_details_from_response(response):
-    soup = BeautifulSoup(response.text, "lxml")
+def parse_book_page(response_text):
+    soup = BeautifulSoup(response_text, "lxml")
     title, author = [
         element.strip() for element in soup.find("h1").text.split("::")
     ]
@@ -116,8 +116,8 @@ def main():
             check_for_redirect(response)
         except requests.HTTPError:
             continue
-        book_details = get_book_details_from_response(
-            response
+        book_details = parse_book_page(
+            response.text
         )
         download_image(book_details["image"], images_directory)
 
