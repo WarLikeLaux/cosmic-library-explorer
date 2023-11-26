@@ -11,13 +11,15 @@ BASE_URL = "https://tululu.org"
 
 
 def get_book_details_from_response(response):
-    soup = BeautifulSoup(response.text, 'lxml')
+    soup = BeautifulSoup(response.text, "lxml")
     title, author = [
-        element.strip() for element in soup.find('h1').text.split("::")
+        element.strip() for element in soup.find("h1").text.split("::")
     ]
     image = urllib.parse.urljoin(
-        BASE_URL, soup.select_one('.bookimage img')['src'])
-    return title, author, image
+        BASE_URL, soup.select_one(".bookimage img")["src"])
+    comments = [element.find(
+        "span", class_="black").text for element in soup.find_all("div", class_="texts")]
+    return title, author, image, comments
 
 
 def get_url_for_scraping(id):
@@ -41,7 +43,7 @@ def get_url_for_download_txt(id):
 def get_filename_from_url(url):
     split_url = urllib.parse.urlsplit(url)
     path = split_url.path
-    filename = path.split('/')[-1]
+    filename = path.split("/")[-1]
     return urllib.parse.unquote(filename)
 
 
@@ -56,7 +58,7 @@ def download_image(url, folder="images/"):
     return filepath
 
 
-def download_txt(url, filename, folder='books/'):
+def download_txt(url, filename, folder="books/"):
     response = requests.get(url)
     response.raise_for_status()
     check_for_redirect(response)
@@ -90,9 +92,9 @@ def main():
     # images_directory_abs_path = os.path.join(os.getcwd(), images_directory)
     # pathlib.Path(images_directory_abs_path).mkdir(parents=True, exist_ok=True)
 
-    start_id = 1
+    start_id = 5
 
-    for increment in range(10):
+    for increment in range(1):
         current_id = start_id + increment
 
         url = get_url_for_scraping(current_id)
@@ -102,7 +104,7 @@ def main():
             check_for_redirect(response)
         except requests.HTTPError:
             continue
-        book_title, book_author, book_image = get_book_details_from_response(
+        book_title, book_author, book_image, comments = get_book_details_from_response(
             response
         )
         download_image(book_image, images_directory)
