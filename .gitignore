@@ -162,5 +162,6 @@ cython_debug/
 # Visual Studio Code (VS Code)
 .vscode
 
-# Download books
+# Download books and covers
 books/
+images/
