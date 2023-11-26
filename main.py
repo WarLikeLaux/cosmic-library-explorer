@@ -35,9 +35,13 @@ def parse_book_page(response_text):
     }
 
 
-def get_url_for_scraping(id):
+def get_scraped_page(id):
     safe_id = urllib.parse.quote(str(id))
-    return f"{BASE_URL}/b{safe_id}/"
+    safe_url = f"{BASE_URL}/b{safe_id}/"
+    response = requests.get(safe_url)
+    response.raise_for_status()
+    check_for_redirect(response)
+    return response.text
 
 
 def get_url_for_download_txt(id):
@@ -120,15 +124,12 @@ def main():
     args = parser.parse_args()
     start_id, end_id = args.start_id, args.end_id
     for current_id in range(start_id, end_id + 1):
-        url = get_url_for_scraping(current_id)
-        response = requests.get(url)
-        response.raise_for_status()
         try:
-            check_for_redirect(response)
+            scraped_page = get_scraped_page(current_id)
         except requests.HTTPError:
             continue
         book_details = parse_book_page(
-            response.text
+            scraped_page
         )
         download_image(book_details["image"], images_directory)
 
