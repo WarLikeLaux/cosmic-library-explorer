@@ -11,13 +11,14 @@ from pathvalidate import sanitize_filename
 BASE_URL = "https://tululu.org"
 
 
-def parse_book_page(response_text):
-    soup = BeautifulSoup(response_text, "lxml")
+def parse_book_page(scraped_page, url):
+    soup = BeautifulSoup(scraped_page, "lxml")
     title, author = [
         element.strip() for element in soup.find("h1").text.split("::")
     ]
     image = urllib.parse.urljoin(
-        BASE_URL, soup.select_one(".bookimage img")["src"])
+        url, soup.select_one(".bookimage img")["src"]
+    )
     comments = [
         element.find("span", class_="black").text
         for element in soup.find_all("div", class_="texts")
@@ -35,10 +36,14 @@ def parse_book_page(response_text):
     }
 
 
-def get_scraped_page(id):
+def get_url_for_scraping(id):
     safe_id = urllib.parse.quote(str(id))
     safe_url = f"{BASE_URL}/b{safe_id}/"
-    response = requests.get(safe_url)
+    return safe_url
+
+
+def get_scraped_page(url_for_scraping):
+    response = requests.get(url_for_scraping)
     response.raise_for_status()
     check_for_redirect(response)
     return response.text
@@ -124,12 +129,14 @@ def main():
     args = parser.parse_args()
     start_id, end_id = args.start_id, args.end_id
     for current_id in range(start_id, end_id + 1):
+        url_for_scraping = get_url_for_scraping(current_id)
         try:
-            scraped_page = get_scraped_page(current_id)
+            scraped_page = get_scraped_page(url_for_scraping)
         except requests.HTTPError:
             continue
         book_details = parse_book_page(
-            scraped_page
+            scraped_page,
+            url_for_scraping
         )
         download_image(book_details["image"], images_directory)
 
