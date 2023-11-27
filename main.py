@@ -1,6 +1,8 @@
 import argparse
 import os
 import pathlib
+import sys
+import time
 import urllib
 
 import dotenv
@@ -9,6 +11,17 @@ from bs4 import BeautifulSoup
 from pathvalidate import sanitize_filename
 
 BASE_URL = "https://tululu.org"
+
+
+class BookNotFoundException(Exception):
+    def __init__(self, message="Book not found, redirect occurred."):
+        self.message = message
+
+    def set_book_id(self, book_id):
+        self.message = f"Book with ID {book_id} not found, redirect occurred."
+
+    def __str__(self):
+        return self.message
 
 
 def parse_book_page(scraped_page, url):
@@ -42,10 +55,8 @@ def get_url_for_scraping(id):
     return safe_url
 
 
-def get_scraped_page(url_for_scraping):
-    response = requests.get(url_for_scraping)
-    response.raise_for_status()
-    check_for_redirect(response)
+def get_scraped_page(url_for_scraping, limits):
+    response = make_request_with_backoff(url_for_scraping, limits=limits)
     return response.text
 
 
@@ -69,9 +80,8 @@ def get_filename_from_url(url):
     return urllib.parse.unquote(filename)
 
 
-def download_image(url, folder="images/"):
-    response = requests.get(url)
-    response.raise_for_status()
+def download_image(url, limits, folder="images/"):
+    response = make_request_with_backoff(url, limits=limits)
     pathlib.Path(folder).mkdir(parents=True, exist_ok=True)
     filename = get_filename_from_url(url)
     filepath = os.path.join(folder, filename)
@@ -80,10 +90,8 @@ def download_image(url, folder="images/"):
     return filepath
 
 
-def download_txt(url, filename, folder="books/"):
-    response = requests.get(url)
-    response.raise_for_status()
-    check_for_redirect(response)
+def download_txt(url, limits, filename, folder="books/"):
+    response = make_request_with_backoff(url, limits=limits)
 
     pathlib.Path(folder).mkdir(parents=True, exist_ok=True)
 
@@ -101,13 +109,60 @@ def download_txt(url, filename, folder="books/"):
 
 def check_for_redirect(response):
     if response.history:
-        raise requests.HTTPError(response=response)
+        raise BookNotFoundException()
+
+
+def make_request_with_backoff(url, limits):
+    timeout, max_timeout, max_attempts = (
+        limits.get("read_timeout", 5),
+        limits.get("max_retries_timeout", 60),
+        limits.get("max_retries_attempts", 5),
+    )
+    attempt = 1
+    while attempt <= max_attempts:
+        try:
+            response = requests.get(url, timeout=timeout)
+            response.raise_for_status()
+            check_for_redirect(response)
+            return response
+        except (
+            requests.exceptions.HTTPError,
+            requests.exceptions.ConnectionError,
+            requests.ReadTimeout
+        ) as error:
+            eprint(
+                f"Attempt {attempt} of {max_attempts} "
+                f"to retrieve data from {url} failed: {error}"
+            )
+            if attempt != max_attempts:
+                time.sleep(timeout)
+            timeout = min(timeout * 2, max_timeout)
+            attempt += 1
+
+    raise Exception(
+        f"Failed to retrieve data from {url} after {max_attempts} attempts"
+    )
+
+
+def eprint(*args, **kwargs):
+    print("\033[31m", *args, "\033[0m", file=sys.stderr, **kwargs)
 
 
 def main():
     dotenv.load_dotenv()
     books_directory = os.getenv("BOOKS_DIRECTORY", "books")
     images_directory = os.getenv("IMAGES_DIRECTORY", "images")
+    requests_limit = {
+        "read_timeout": int(
+            os.getenv("REQUESTS_TIMEOUT", 5)
+        ),
+        "max_retries_timeout": int(
+            os.getenv("REQUESTS_MAX_RETRIES_TIMEOUT", 60)
+        ),
+        "max_retries_attempts": int(
+            os.getenv("REQUESTS_MAX_RETRIES_ATTEMPTS", 5)
+        ),
+    }
 
     parser = argparse.ArgumentParser(
         description="Script for downloading books from tululu.org."
@@ -128,25 +183,41 @@ def main():
     )
     args = parser.parse_args()
     start_id, end_id = args.start_id, args.end_id
-    for current_id in range(start_id, end_id + 1):
-        url_for_scraping = get_url_for_scraping(current_id)
+    for book_id in range(start_id, end_id + 1):
+        url_for_scraping = get_url_for_scraping(book_id)
         try:
-            scraped_page = get_scraped_page(url_for_scraping)
-        except requests.HTTPError:
+            scraped_page = get_scraped_page(url_for_scraping, requests_limit)
+        except BookNotFoundException as error:
+            error.set_book_id(book_id)
+            eprint(error, end="\n\n")
             continue
+        except Exception as error:
+            eprint(error, end="\n\n")
+            continue
+
         book_details = parse_book_page(
             scraped_page,
             url_for_scraping
         )
-        download_image(book_details["image"], images_directory)
+        download_image(
+            url=book_details["image"],
+            limits=requests_limit,
+            folder=images_directory,
+        )
 
         try:
             downloaded = download_txt(
-                url=get_url_for_download_txt(current_id),
-                filename=f"{current_id}. {book_details['title']}.txt",
+                url=get_url_for_download_txt(book_id),
+                limits=requests_limit,
+                filename=f"{book_id}. {book_details['title']}.txt",
                 folder=books_directory,
             )
-        except requests.HTTPError:
+        except BookNotFoundException as error:
+            error.set_book_id(book_id)
+            eprint(error, end="\n\n")
+            continue
+        except Exception as error:
+            eprint(error, end="\n\n")
             continue
 
         title = book_details["title"]

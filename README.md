@@ -67,6 +67,9 @@ To set up your environment variables, you'll need to create a `.env` file in the
 
 - `BOOKS_DIRECTORY`: this variable specifies the directory where the downloaded book text files will be saved. If not set, the script defaults to a directory named `books` in the current working directory. Ensure this directory is writable.
 - `IMAGES_DIRECTORY`: this variable defines the directory for saving the downloaded cover images of the books. In the absence of this setting, the script uses a default directory named `images` in the current working directory. Similar to `BOOKS_DIRECTORY`, this should also be a writable location.
+- `REQUESTS_TIMEOUT`: sets the timeout in seconds for network requests. Default is `5` seconds. This is used to specify how long to wait for a server response.
+- `REQUESTS_MAX_RETRIES_TIMEOUT`: specifies the maximum timeout in seconds for retrying a failed request. Default is `60` seconds. This helps in handling transient network issues.
+- `REQUESTS_MAX_RETRIES_ATTEMPTS`: determines the maximum number of retry attempts for a failed request. Default is set to `5`. It ensures that the script keeps trying to fetch data a reasonable number of times before giving up.
 
 Please ensure that each environment variable is assigned the correct value.
 
